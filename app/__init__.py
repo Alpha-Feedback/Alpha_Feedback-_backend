@@ -77,7 +77,7 @@ def create_app():
 
     # Add resources to API 
     api.add_resource(HelloWorld, '/')
-    api.add_resource(UserResource, '/users', '/users/<int:user_id>')
+    api.add_resource(UserResource, '/users', '/users/<int:user_id>',  '/users/all')
     api.add_resource(IssueResource, '/issues', '/issues/<int:issue_id>')
     api.add_resource(SectorResource, '/sectors', '/sectors/<int:sector_id>')
     api.add_resource(UpvoteResource, '/issues/<int:issue_id>/upvote/<int:user_id>')

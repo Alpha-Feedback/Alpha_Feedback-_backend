@@ -2,7 +2,7 @@ from flask import request
 from flask_restful import Resource
 from . import db, User, Issue, Sector, Upvote, Downvote
 from marshmallow import Schema, fields, validate
-
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 class HelloWorld(Resource):
     def get(self):
         return {'message': 'Hello, World!'}
@@ -15,31 +15,61 @@ class UserSchema(Schema):
     password = fields.Str(required=True, validate=validate.Length(min=8))
 
 class UserResource(Resource):
-    def get(self, user_id=None):
-        if user_id:
-            user = User.query.get(user_id)
-            if user:
-                return {'email': user.email, 'username': user.username, 'school_id': user.school_id, 'password': user.password}
-            else:
-                return {'message': 'User not found'}, 404
-        else:
-            users = User.query.all()
-            result = []
-            for user in users:
-                result.append({'id': user.id, 'email': user.email, 'username': user.username, 'school_id': user.school_id, 'password': user.password})
-            return result
+    # login a user and generate JWT token
+    def get(self):
+        email = request.json['email']
+        password = request.json['password']
 
+        # authenticate user
+        user = User.query.filter_by(email=email).first()
+        if not user or user.password != password:
+            return {'message': 'Invalid credentials'}, 401
+
+        # generate JWT token
+        access_token = create_access_token(identity=user.id)
+        return {'access_token': access_token}, 200
+    
+    # get user profile
+    # @jwt_required()
+    # def get(self, user_id):
+    #     if user_id:
+    #         user = User.query.get(user_id)
+    #         if user:
+    #             return {'email': user.email, 'username': user.username, 'school_id': user.school_id}
+    #         else:
+    #             return {'message': 'User not found'}, 404
+    #     else:
+    #         current_user_id = get_jwt_identity()
+    #         user = User.query.get(current_user_id)
+    #         return {'email': user.email, 'username': user.username, 'school_id': user.school_id}
+
+    
+    # register a new user
     def post(self):
         email = request.json['email']
         username = request.json['username']
         school_id = request.json['school_id']
         password = request.json['password']
         user = User(email=email, username=username, school_id=school_id, password=password)
+        
+        # check if user with the given email already exists
+        existing_user = User.query.filter_by(email=email).first()
+        if existing_user:
+            return {'message': 'User with that email already exists'}, 400
+
         db.session.add(user)
         db.session.commit()
-        return {'message': 'User created', 'data': {'id': user.id, 'email': user.email, 'username': user.username, 'school_id': user.school_id, 'password': user.password}}, 201
- 
+
+        # generate JWT token for the new user
+        access_token = create_access_token(identity=user.id)
+        return {'message': 'User created', 'access_token': access_token}, 201
+     
+    # update user profile
+    @jwt_required()
     def put(self, user_id):
+        current_user_id = get_jwt_identity()
+        if current_user_id != user_id:
+            return {'message': 'You do not have permission to update this user profile'}, 401
         user = User.query.get(user_id)
         if user:
             email = request.json.get('email', user.email)
@@ -55,7 +85,12 @@ class UserResource(Resource):
         else:
             return {'message': 'User not found'}, 404
 
+    # delete user profile
+    @jwt_required()
     def delete(self, user_id):
+        current_user_id = get_jwt_identity()
+        if current_user_id != user_id:
+            return {'message': 'You do not have permission to delete this user profile'}, 401
         user = User.query.get(user_id)
         if user:
             db.session.delete(user)
@@ -63,6 +98,15 @@ class UserResource(Resource):
             return {'message': 'User deleted', 'id': user.id}
         else:
             return {'message': 'User not found'}, 404
+    
+    @jwt_required()
+    # get all users
+    def get_all(self):
+        users = User.query.all()
+        result = []
+        for user in users:
+            result.append({'id': user.id, 'email': user.email, 'username': user.username, 'school_id': user.school_id, 'password': user.password})
+        return result
 
 
 class IssueResource(Resource):
